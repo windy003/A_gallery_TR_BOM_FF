@@ -213,9 +213,13 @@ class TouchImageView : AppCompatImageView {
         origWidth = scale * bmWidth
         origHeight = scale * bmHeight
 
-        // 宽度铺满，水平无冗余；垂直方向顶部对齐，不居中
+        // 宽度铺满，水平无冗余；垂直方向居中显示
         redundantXSpace = 0f
-        redundantYSpace = 0f
+        redundantYSpace = if (origHeight < height) {
+            (height - origHeight) / 2  // 图片高度小于屏幕，垂直居中
+        } else {
+            0f  // 图片高度大于等于屏幕，顶部对齐
+        }
 
         matrix.postTranslate(redundantXSpace, redundantYSpace)
 
@@ -298,10 +302,16 @@ class TouchImageView : AppCompatImageView {
                 matrix.postScale(2f, 2f, e.x, e.y)
                 saveScale = 2f
             } else {
-                // 重置到初始状态：宽度铺满，顶部对齐
+                // 重置到初始状态：宽度铺满，垂直居中
                 val baseScale = width / bmWidth
                 matrix.setScale(baseScale, baseScale)
-                matrix.postTranslate(0f, 0f)
+                val scaledHeight = baseScale * bmHeight
+                val yOffset = if (scaledHeight < height) {
+                    (height - scaledHeight) / 2  // 垂直居中
+                } else {
+                    0f  // 顶部对齐
+                }
+                matrix.postTranslate(0f, yOffset)
                 saveScale = 1f
             }
 
