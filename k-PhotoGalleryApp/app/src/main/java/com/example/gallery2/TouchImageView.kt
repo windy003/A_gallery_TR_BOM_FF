@@ -16,7 +16,7 @@ class TouchImageView : AppCompatImageView {
 
     private val last = PointF()
     private val start = PointF()
-    private var minScale = 1f
+    private var minScale = 0.5f  // 允许缩小到原始大小的50%
     private var maxScale = 5f
     private lateinit var m: FloatArray
 
@@ -93,19 +93,24 @@ class TouchImageView : AppCompatImageView {
                         val needHorizontalScroll = scaleWidth > width
                         val needVerticalScroll = scaleHeight > height
 
-                        // 判断滑动方向（只在第一次移动时判断）
-                        if (!isVerticalScrolling && needVerticalScroll) {
-                            val totalDeltaX = Math.abs(curr.x - start.x)
-                            val totalDeltaY = Math.abs(curr.y - start.y)
+                        // 如果图片完全小于屏幕（缩小状态），不允许拖动
+                        if (!needHorizontalScroll && !needVerticalScroll) {
+                            // 图片完全小于屏幕，不需要拖动，允许ViewPager2翻页
+                            allowParentInterceptTouchEvent()
+                            last.set(curr.x, curr.y)
+                        } else {
+                            // 判断滑动方向（只在第一次移动时判断）
+                            if (!isVerticalScrolling && needVerticalScroll) {
+                                val totalDeltaX = Math.abs(curr.x - start.x)
+                                val totalDeltaY = Math.abs(curr.y - start.y)
 
-                            // 如果垂直滑动距离明显大于水平滑动，则认为是垂直滑动
-                            if (totalDeltaY > SCROLL_THRESHOLD && totalDeltaY > totalDeltaX * 1.5) {
-                                isVerticalScrolling = true
-                                disallowParentInterceptTouchEvent()
+                                // 如果垂直滑动距离明显大于水平滑动，则认为是垂直滑动
+                                if (totalDeltaY > SCROLL_THRESHOLD && totalDeltaY > totalDeltaX * 1.5) {
+                                    isVerticalScrolling = true
+                                    disallowParentInterceptTouchEvent()
+                                }
                             }
-                        }
 
-                        if (needHorizontalScroll || needVerticalScroll) {
                             // 如果是垂直滑动模式，禁止水平移动
                             if (isVerticalScrolling) {
                                 deltaX = 0f
@@ -249,36 +254,58 @@ class TouchImageView : AppCompatImageView {
                 scaleFactor = minScale / origScale
             }
 
-            right = origWidth * saveScale - width
-            bottom = origHeight * saveScale - height
+            val scaledWidth = origWidth * saveScale
+            val scaledHeight = origHeight * saveScale
+            right = scaledWidth - width
+            bottom = scaledHeight - height
 
-            if (origWidth * saveScale <= width || origHeight * saveScale <= height) {
+            if (scaledWidth <= width || scaledHeight <= height) {
+                // 图片缩小到比屏幕小时，以屏幕中心为缩放中心
                 matrix.postScale(scaleFactor, scaleFactor, width / 2, height / 2)
-                if (scaleFactor < 1) {
-                    matrix.getValues(m)
-                    val x = m[Matrix.MTRANS_X]
-                    val y = m[Matrix.MTRANS_Y]
 
-                    if (scaleFactor < 1) {
-                        if ((origWidth * saveScale).toInt() < width.toInt()) {
-                            if (y < -bottom)
-                                matrix.postTranslate(0f, -(y + bottom))
-                            else if (y > 0)
-                                matrix.postTranslate(0f, -y)
-                        } else {
-                            if (x < -right)
-                                matrix.postTranslate(-(x + right), 0f)
-                            else if (x > 0)
-                                matrix.postTranslate(-x, 0f)
-                        }
+                // 缩小后需要调整位置使图片居中
+                matrix.getValues(m)
+                val x = m[Matrix.MTRANS_X]
+                val y = m[Matrix.MTRANS_Y]
+
+                // 计算居中所需的偏移量
+                val targetX: Float
+                val targetY: Float
+
+                if (scaledWidth < width) {
+                    // 图片宽度小于屏幕宽度，水平居中
+                    targetX = (width - scaledWidth) / 2
+                } else {
+                    // 图片宽度大于等于屏幕宽度，限制在边界内
+                    targetX = when {
+                        x > 0 -> 0f
+                        x < -right -> -right
+                        else -> x
                     }
                 }
+
+                if (scaledHeight < height) {
+                    // 图片高度小于屏幕高度，垂直居中
+                    targetY = (height - scaledHeight) / 2
+                } else {
+                    // 图片高度大于等于屏幕高度，限制在边界内
+                    targetY = when {
+                        y > 0 -> 0f
+                        y < -bottom -> -bottom
+                        else -> y
+                    }
+                }
+
+                // 移动到目标位置
+                matrix.postTranslate(targetX - x, targetY - y)
             } else {
+                // 图片比屏幕大时，以手指焦点为缩放中心
                 matrix.postScale(scaleFactor, scaleFactor, detector.focusX, detector.focusY)
                 matrix.getValues(m)
                 val x = m[Matrix.MTRANS_X]
                 val y = m[Matrix.MTRANS_Y]
 
+                // 限制在边界内
                 if (scaleFactor < 1) {
                     if (x < -right)
                         matrix.postTranslate(-(x + right), 0f)
