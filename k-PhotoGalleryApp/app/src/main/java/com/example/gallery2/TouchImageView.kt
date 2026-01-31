@@ -324,22 +324,74 @@ class TouchImageView : AppCompatImageView {
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
         override fun onDoubleTap(e: MotionEvent): Boolean {
+            // 使用实时的 View 尺寸，而不是缓存的值（解决折叠屏展开时尺寸不同步问题）
+            val viewWidth = getWidth().toFloat()
+            val viewHeight = getHeight().toFloat()
+
             // Double tap to zoom
             if (saveScale == 1f) {
+                // 计算当前图片在 View 中的实际位置
+                matrix.getValues(m)
+                val currentTransX = m[Matrix.MTRANS_X]
+                val currentTransY = m[Matrix.MTRANS_Y]
+                val currentScaleX = m[Matrix.MSCALE_X]
+
+                // 将触摸点坐标转换为相对于图片的坐标
+                // 触摸点在图片坐标系中的位置
+                val touchXInImage = (e.x - currentTransX) / currentScaleX
+                val touchYInImage = (e.y - currentTransY) / currentScaleX
+
+                // 使用正确的坐标进行缩放
                 matrix.postScale(2f, 2f, e.x, e.y)
                 saveScale = 2f
+
+                // 更新边界
+                right = origWidth * saveScale - viewWidth
+                bottom = origHeight * saveScale - viewHeight
+
+                // 确保放大后不超出边界
+                matrix.getValues(m)
+                val x = m[Matrix.MTRANS_X]
+                val y = m[Matrix.MTRANS_Y]
+                val scaledWidth = origWidth * saveScale
+                val scaledHeight = origHeight * saveScale
+
+                var deltaX = 0f
+                var deltaY = 0f
+
+                if (scaledWidth > viewWidth) {
+                    if (x > 0) deltaX = -x
+                    else if (x < -right) deltaX = -(x + right)
+                }
+
+                if (scaledHeight > viewHeight) {
+                    if (y > 0) deltaY = -y
+                    else if (y < -bottom) deltaY = -(y + bottom)
+                }
+
+                if (deltaX != 0f || deltaY != 0f) {
+                    matrix.postTranslate(deltaX, deltaY)
+                }
             } else {
                 // 重置到初始状态：宽度铺满，垂直居中
-                val baseScale = width / bmWidth
+                val baseScale = viewWidth / bmWidth
                 matrix.setScale(baseScale, baseScale)
                 val scaledHeight = baseScale * bmHeight
-                val yOffset = if (scaledHeight < height) {
-                    (height - scaledHeight) / 2  // 垂直居中
+                val yOffset = if (scaledHeight < viewHeight) {
+                    (viewHeight - scaledHeight) / 2  // 垂直居中
                 } else {
                     0f  // 顶部对齐
                 }
                 matrix.postTranslate(0f, yOffset)
                 saveScale = 1f
+
+                // 更新缓存的尺寸和边界
+                width = viewWidth
+                height = viewHeight
+                origWidth = baseScale * bmWidth
+                origHeight = baseScale * bmHeight
+                right = origWidth * saveScale - width
+                bottom = origHeight * saveScale - height
             }
 
             imageMatrix = matrix
