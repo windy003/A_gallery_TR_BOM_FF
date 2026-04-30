@@ -313,10 +313,13 @@ class ImageViewerActivity : AppCompatActivity() {
             // 撤销删除操作：将照片恢复到列表中
             val position = minOf(originalPosition, photos.size)
             photos.add(position, photo)
-            adapter.notifyItemInserted(position)
+            // 使用notifyDataSetChanged避免ViewPager2自动调整位置
+            adapter.notifyDataSetChanged()
 
             currentPosition = position
-            viewPager.setCurrentItem(currentPosition, false)
+            viewPager.post {
+                viewPager.setCurrentItem(currentPosition, false)
+            }
 
             updatePageInfo()
             Toast.makeText(this, "已撤销删除: ${photo.name}", Toast.LENGTH_SHORT).show()
@@ -333,10 +336,13 @@ class ImageViewerActivity : AppCompatActivity() {
 
                     val position = minOf(originalPosition, photos.size)
                     photos.add(position, photo)
-                    adapter.notifyItemInserted(position)
+                    // 使用notifyDataSetChanged避免ViewPager2自动调整位置
+                    adapter.notifyDataSetChanged()
 
                     currentPosition = position
-                    viewPager.setCurrentItem(currentPosition, false)
+                    viewPager.post {
+                        viewPager.setCurrentItem(currentPosition, false)
+                    }
 
                     updatePageInfo()
                     Toast.makeText(this, "已撤销延迟操作: ${photo.name}", Toast.LENGTH_SHORT).show()
